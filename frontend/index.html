@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EntraScribe</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- MSAL.js v3 from CDN -->
+  <script src="https://alcdn.msauth.net/browser/3.14.0/js/msal-browser.min.js"></script>
+</head>
+<body>
+
+<!-- ── Login Page ───────────────────────────────────────────────────────── -->
+<div id="page-login" class="page">
+  <div class="login-card">
+    <div class="logo-large">EntraScribe</div>
+    <p class="tagline">
+      Automatically generate professional descriptions for all Enterprise
+      Applications in your Microsoft Entra ID tenant — powered by free AI.
+    </p>
+    <button class="btn btn-ms" id="btn-login">
+      <img src="https://learn.microsoft.com/en-us/azure/active-directory/develop/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.png"
+           alt="Microsoft logo" />
+      Sign in with Microsoft
+    </button>
+  </div>
+</div>
+
+<!-- ── App Shell (hidden until logged in) ───────────────────────────────── -->
+<div id="app-shell" class="app-shell" style="display:none">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>EntraScribe</h1>
+      <span>Entra ID Description Tool</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="active" data-view="dashboard">
+        &#9776; Dashboard
+      </a>
+      <a href="#" data-view="log">
+        &#9656; Activity Log
+      </a>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-name" id="user-name">Loading...</div>
+      <div class="user-email" id="user-email"></div>
+      <button class="btn-signout" id="btn-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="main-content">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <h2 id="view-title">Enterprise Applications</h2>
+      <span id="provider-badge" class="provider-badge">AI: checking...</span>
+    </div>
+
+    <!-- Dashboard view -->
+    <div id="view-dashboard" class="page">
+
+      <div id="dry-run-banner" class="dry-run-banner" style="display:none">
+        &#9888; <strong>Dry Run mode is active.</strong>
+        Descriptions will be generated but NOT written back to Entra ID.
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="btn-refresh">&#8635; Refresh</button>
+        <button class="btn btn-primary" id="btn-generate" disabled>
+          &#10024; Generate Descriptions
+        </button>
+        <button class="btn btn-success" id="btn-write" disabled>
+          &#10003; Write to Entra ID
+        </button>
+        <div class="toolbar-separator"></div>
+        <span class="selected-count" id="selected-count"></span>
+        <button class="btn btn-secondary" id="btn-export">&#8659; Export CSV</button>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrapper">
+        <table id="apps-table">
+          <thead>
+            <tr>
+              <th style="width:36px">
+                <input type="checkbox" id="select-all" title="Select all" />
+              </th>
+              <th>Application</th>
+              <th>Publisher</th>
+              <th>Current Description</th>
+              <th>Generated</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="apps-tbody">
+            <tr>
+              <td colspan="6">
+                <div class="empty-state">
+                  <h3>Loading apps...</h3>
+                  <p>Fetching Enterprise Applications from Entra ID</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Log panel -->
+      <div class="log-panel" id="log-panel">
+        <div class="log-entry info"><span class="ts">--:--:--</span>EntraScribe ready. Sign in to begin.</div>
+      </div>
+    </div>
+
+    <!-- Log view (full page) -->
+    <div id="view-log" class="page" style="display:none">
+      <div class="log-panel" id="log-panel-full" style="height:calc(100vh - 120px)"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
