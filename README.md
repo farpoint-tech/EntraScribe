@@ -8,127 +8,247 @@
 
 ---
 
-## Features
+## What This Tool Does
 
-- **Auto-generate** descriptions for all Entra ID Enterprise Apps via Microsoft Graph API
-- **AI fallback chain**: Groq → Gemini → Mistral — uses whichever provider key you have
-- **Write back** to Entra ID with a single click (or use Dry Run to preview only)
-- **CSV export** for offline review or audit
-- **Secure by default**: Azure AD token validation on every backend request
-- **Docker-ready**: one command to run the full stack
+EntraScribe connects to your Microsoft Entra ID tenant, reads all Enterprise Applications, generates professional descriptions using AI, and writes them back — all with one click. No data leaves your tenant except to the AI provider you choose.
 
 ---
 
 ## Prerequisites
 
-- **Azure App Registration** with the following Microsoft Graph API permissions (Application type):
-  - `Application.Read.All`
-  - `Application.ReadWrite.All` (or `ServicePrincipalEndpoint.ReadWrite.All` for write)
-- At least **one AI provider API key** (Groq is free at [console.groq.com](https://console.groq.com))
-- Docker + Docker Compose
+Before you start, make sure you have:
+
+- [ ] **Admin access** to your Microsoft Entra ID tenant (Global Admin or Application Administrator)
+- [ ] **Docker Desktop** installed → [docker.com/get-started](https://www.docker.com/get-started/)
+- [ ] **Git** installed → [git-scm.com](https://git-scm.com/)
+- [ ] At least **one free AI API key** (see Step 2 below)
 
 ---
 
-## Quick Start
+## Step 1 — Azure App Registration (~15 minutes)
 
-```bash
-# 1. Clone and enter the directory
-git clone https://github.com/farpoint-tech/entrascribe.git
-cd entrascribe
+> You need to do this once. This tells Azure that EntraScribe is allowed to access your tenant.
 
-# 2. Configure your environment
-cp .env.example .env
-# Edit .env with your Azure credentials and at least one AI API key
+### 1.1 Create the App Registration
 
-# 3. Start everything
-docker-compose up --build
+1. Go to **[portal.azure.com](https://portal.azure.com)**
+2. Navigate to **Entra ID → App registrations → New registration**
+3. Fill in:
+   ```
+   Name:                    EntraScribe
+   Supported account types: Accounts in this organizational directory only (Single tenant)
+   Redirect URI:            Single-page application → http://localhost:3000
+   ```
+4. Click **Register**
+
+### 1.2 Copy the IDs you need
+
+On the App Registration overview page, copy these two values:
+
+```
+Application (client) ID  →  AZURE_CLIENT_ID
+Directory (tenant) ID    →  AZURE_TENANT_ID
 ```
 
-Open **http://localhost:3000** → Sign in with Microsoft → done.
+### 1.3 Create a Client Secret
+
+1. Left menu → **Certificates & secrets → New client secret**
+2. Description: `entrascribe-secret`, Expiry: 24 months
+3. Click **Add**
+4. **Copy the Value immediately** (only shown once!)
+
+```
+Value  →  AZURE_CLIENT_SECRET
+```
+
+### 1.4 Add API Permissions
+
+1. Left menu → **API permissions → Add a permission → Microsoft Graph → Application permissions**
+2. Search and add these two:
+   - `Application.Read.All`
+   - `Application.ReadWrite.All`
+3. Click **Grant admin consent for [your tenant]** → Confirm
+
+### 1.5 Expose an API scope (for frontend login)
+
+1. Left menu → **Expose an API**
+2. Click **Add** next to Application ID URI → Accept the default (`api://YOUR_CLIENT_ID`)
+3. Click **Add a scope**:
+   ```
+   Scope name:             access_as_user
+   Who can consent:        Admins and users
+   Admin consent display:  Access EntraScribe
+   State:                  Enabled
+   ```
+4. Click **Add scope**
 
 ---
 
-## Environment Variables
+## Step 2 — Get a Free AI API Key (~5 minutes)
 
-| Variable | Required | Description |
+You need at least one. Groq is recommended — it's the fastest and has a generous free tier.
+
+| Provider | Sign up | Get key |
 |---|---|---|
-| `AZURE_TENANT_ID` | Yes | Your Azure AD tenant ID |
-| `AZURE_CLIENT_ID` | Yes | App Registration client ID |
-| `AZURE_CLIENT_SECRET` | Yes | App Registration client secret |
-| `GROQ_API_KEY` | At least one | Groq API key (free tier available) |
-| `GEMINI_API_KEY` | At least one | Google Gemini API key |
-| `MISTRAL_API_KEY` | At least one | Mistral API key |
-| `ALLOWED_ORIGINS` | No | Comma-separated frontend origins (default: `http://localhost:3000`) |
-| `SECRET_KEY` | Yes | Random 32-char string for internal use |
-| `DRY_RUN` | No | Set `true` to skip Graph write calls (default: `false`) |
+| **Groq** (recommended) | [console.groq.com](https://console.groq.com) | API Keys → Create API Key |
+| Gemini | [aistudio.google.com](https://aistudio.google.com) | Get API Key |
+| Mistral | [console.mistral.ai](https://console.mistral.ai) | API Keys → Create |
 
 ---
 
-## Frontend Configuration
+## Step 3 — Clone and Configure
 
-Before the first use, update `frontend/app.js` with your App Registration values:
+```bash
+# Clone the repo
+git clone https://github.com/farpoint-tech/EntraScribe.git
+cd EntraScribe
+
+# Create your local config file
+cp .env.example .env
+```
+
+Now open `.env` in any text editor and fill in your values:
+
+```bash
+# ── Microsoft Graph ───────────────────────────────
+AZURE_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+AZURE_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+AZURE_CLIENT_SECRET=your-secret-value-from-step-1.3
+
+# ── AI Provider (fill in at least one) ───────────
+GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ── App Settings ─────────────────────────────────
+ALLOWED_ORIGINS=http://localhost:3000
+SECRET_KEY=any-random-32-character-string-here
+DRY_RUN=true
+```
+
+> **DRY_RUN=true** means the tool will generate descriptions but NOT write them back to Entra ID yet. Change to `false` when you're ready to go live.
+
+---
+
+## Step 4 — Configure the Frontend
+
+Open `frontend/app.js` in a text editor. Find lines 12–15 and replace the placeholders:
 
 ```js
 const CONFIG = {
-  clientId: "your-client-id",   // App Registration client ID (NOT a secret)
-  tenantId: "your-tenant-id",
-  scopes: ["api://your-client-id/access_as_user"],
-  // ...
+  clientId: "YOUR_CLIENT_ID_HERE",   // ← paste AZURE_CLIENT_ID
+  tenantId: "YOUR_TENANT_ID_HERE",   // ← paste AZURE_TENANT_ID
+  scopes: ["api://YOUR_CLIENT_ID_HERE/access_as_user"],  // ← paste AZURE_CLIENT_ID twice
+  ...
 };
 ```
 
-These values are public (used by MSAL in the browser). The client secret lives only in `.env`.
+> These are **not secrets** — they are public values that MSAL needs in the browser to initiate login. Never put your `AZURE_CLIENT_SECRET` here.
+
+---
+
+## Step 5 — Start the App
+
+```bash
+docker-compose up --build
+```
+
+Wait until you see:
+```
+backend   | INFO:     Application startup complete.
+```
+
+Then open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+---
+
+## Step 6 — First Use
+
+1. Click **Sign in with Microsoft**
+2. Log in with your Entra ID account
+3. Click **Refresh** — your Enterprise Apps will load
+4. Select apps (or select all with the checkbox)
+5. Click **Generate Descriptions** — AI descriptions appear in the table
+6. Review the generated text
+7. When happy: set `DRY_RUN=false` in `.env`, restart (`docker-compose restart`), then click **Write to Entra ID**
+
+---
+
+## Environment Variables Reference
+
+| Variable | Required | Description |
+|---|---|---|
+| `AZURE_TENANT_ID` | Yes | Entra ID → Overview → Directory (tenant) ID |
+| `AZURE_CLIENT_ID` | Yes | App Registration → Application (client) ID |
+| `AZURE_CLIENT_SECRET` | Yes | App Registration → Certificates & secrets → Value |
+| `GROQ_API_KEY` | At least one | From console.groq.com |
+| `GEMINI_API_KEY` | At least one | From aistudio.google.com |
+| `MISTRAL_API_KEY` | At least one | From console.mistral.ai |
+| `ALLOWED_ORIGINS` | No | Frontend URL (default: `http://localhost:3000`) |
+| `SECRET_KEY` | Yes | Any random 32-character string |
+| `DRY_RUN` | No | `true` = preview only, `false` = write to Entra ID |
 
 ---
 
 ## Dry Run Mode
 
-Set `DRY_RUN=true` in `.env` to generate descriptions without writing them back to Entra ID. A yellow banner appears in the UI to confirm the mode is active. Useful for previewing results before committing.
+When `DRY_RUN=true` (default), the app generates descriptions and shows them in the UI but makes **no changes** to your Entra ID tenant. A yellow banner confirms this mode is active. Use this to review results before going live.
 
 ---
 
 ## AI Provider Fallback
 
-The system tries providers in order and skips any without a configured API key:
+The system automatically tries providers in order. If one fails or hits a rate limit, it moves to the next:
 
 ```
-Groq (llama-3.3-70b-versatile)
-  ↓ on rate limit or error
-Gemini (gemini-1.5-flash)
-  ↓ on rate limit or error
-Mistral (mistral-small-latest)
-  ↓ all exhausted
-503 error returned
+Groq → Gemini → Mistral → error if all fail
 ```
 
-Each API response includes `provider_used` so you always know which provider was used.
+Each response shows which provider was used (`provider_used` field).
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Login fails / redirect error | Check Redirect URI in Azure is exactly `http://localhost:3000` and type is "Single-page application" |
+| 401 Unauthorized on all API calls | Check `AZURE_CLIENT_ID` in `frontend/app.js` matches `.env` |
+| Apps don't load | Verify `Application.Read.All` permission has admin consent granted |
+| Write fails | Verify `Application.ReadWrite.All` has admin consent, and `DRY_RUN=false` |
+| AI error 503 | At least one AI API key must be set in `.env` |
+| Docker not starting | Run `docker-compose logs backend` to see the error |
 
 ---
 
 ## Architecture
 
 ```
-frontend/          Vanilla HTML/CSS/JS + MSAL.js (served by nginx)
-    ↓ Bearer token (Azure AD JWT)
-backend/           FastAPI (Python 3.11)
-    ├── auth.py    Validates Azure AD JWT on every request
-    ├── graph.py   Microsoft Graph API (client_credentials flow)
-    ├── ai.py      AI fallback chain (OpenAI-compatible clients)
-    └── config.py  All settings from environment variables
+http://localhost:3000    Vanilla HTML/JS + MSAL.js (nginx)
+         ↓ Azure AD Bearer token on every request
+http://localhost:8000    FastAPI backend (Python 3.11)
+         ├── Validates Azure AD JWT (auth.py)
+         ├── Reads/writes Enterprise Apps via Graph API (graph.py)
+         └── Generates descriptions via AI fallback chain (ai.py)
 ```
 
 ---
 
-## Contributing
+## Security Notes
 
-Contributions are welcome! Please:
+- Your `AZURE_CLIENT_SECRET` and AI API keys are **only in `.env`** — never in the frontend or committed to Git
+- `.env` is in `.gitignore` — it will never be pushed to GitHub
+- Azure AD token is validated on **every** backend request
+- Use `DRY_RUN=true` until you're confident in the generated descriptions
+
+---
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes with clear commit messages
 4. Open a Pull Request
 
-Please do not commit `.env` files or any secrets. See `.gitignore`.
+Do not commit `.env` files or any secrets.
 
 ---
 
